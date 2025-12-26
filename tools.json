@@ -1,0 +1,68 @@
+[
+    {
+        "name": "search_flight",
+        "description": "Search available flights based on user input. If destination is omitted, fetch popular destinations from the origin.",
+        "required": ["origin", "adults"],
+        "params": [
+            "origin",
+            "destination",
+            "departure_date",
+            "return_date",
+            "adults",
+            "travel_class",
+            "max_price",
+            "max_results"
+        ]
+    },
+    {
+        "name": "fetch-flight-price",
+        "description": "Get pricing for a selected flight offer.",
+        "required": ["flight_offer"],
+        "params": [
+            "flight_offer"
+        ]
+    },
+    {
+        "name": "create-flight-order",
+        "description": "Create a flight booking order with the given flight offer and traveler details.",
+        "required": ["order_info"],
+        "params": [
+            "order_info"
+        ]
+    },
+    {
+        "name": "fetch_hotel",
+        "description": "Fetch hotels by city code, geo coordinates (latitude/longitude), or specific hotel IDs.",
+        "required": ["city_code"],
+        "params": [
+            "hotel_id",
+            "geo_code",
+            "city_code"
+        ]
+    },
+    {
+        "name": "fetch_hotel_offers",
+        "description": "Fetch available hotel offers for a given hotel ID and number of adults.",
+        "required": ["hotel_id"],
+        "params": [
+            "hotel_id",
+            "adult_count"
+        ]
+    },
+    {
+        "name": "fetch_hotel_rating",
+        "description": "Fetch hotel sentiment/rating data for one or more hotel IDs.",
+        "required": ["hotel_ids"],
+        "params": [
+            "hotel_ids"
+        ]
+    },
+    {
+        "name": "book_hotel",
+        "description": "Book a hotel using the provided HotelOrderSchema data.",
+        "required": ["data"],
+        "params": [
+            "data"
+        ]
+    }
+]
