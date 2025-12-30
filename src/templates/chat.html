@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Gemini SSE Chat</title>
+</head>
+<body>
+  <h2>Gemini Streaming Chat</h2>
+
+  <input id="prompt" placeholder="Type a message..." />
+  <button onclick="send()">Send</button>
+
+  <pre id="output"></pre>
+
+  <script>
+    let source = null;
+    const output = document.getElementById("output");
+
+    function send() {
+      const prompt = document.getElementById("prompt").value;
+      if (!prompt) return;
+
+      // close previous stream
+      if (source) source.close();
+
+      output.innerText += "\n\nYou: " + prompt + "\nAI: ";
+
+      source = new EventSource(
+        "/stream?prompt=" + encodeURIComponent(prompt)
+      );
+
+      source.onmessage = (event) => {
+        output.innerText += event.data;
+      };
+
+      source.addEventListener("end", () => {
+        source.close();
+        source = null;
+      });
+    }
+  </script>
+</body>
+</html>
