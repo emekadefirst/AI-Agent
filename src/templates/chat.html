@@ -1,43 +1,212 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Gemini SSE Chat</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Viazuri Travel Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <h2>Gemini Streaming Chat</h2>
+<body class="bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center h-screen font-sans">
 
-  <input id="prompt" placeholder="Type a message..." />
-  <button onclick="send()">Send</button>
+  <div class="flex flex-col w-full max-w-2xl h-[90vh] bg-white rounded-xl shadow-xl overflow-hidden">
+    <!-- Header -->
+    <div class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-4 text-center">
+      <h1 class="text-2xl font-bold">✈️ Viazuri Travel</h1>
+      <p class="text-sm opacity-80">Your AI travel assistant</p>
+    </div>
 
-  <pre id="output"></pre>
+    <!-- Chat messages -->
+    <div id="chat" class="flex-1 p-4 overflow-y-auto bg-gray-100 space-y-4">
+      <div class="flex items-start space-x-2">
+        <div class="bg-white border border-gray-300 rounded-xl p-3 shadow-sm max-w-[70%]">
+          Hello! I'm your travel assistant. Where would you like to go? ✈️
+        </div>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="p-4 bg-white flex gap-2 border-t border-gray-300">
+      <input id="prompt" type="text" placeholder="Ask about flights, hotels, or destinations..." 
+        class="flex-1 p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-400">
+      <button id="send-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-full font-semibold">
+        Send
+      </button>
+    </div>
+  </div>
 
   <script>
-    let source = null;
-    const output = document.getElementById("output");
+    class ChatStorage {
+        constructor(sessionId) {
+            this.sessionId = sessionId;
+            this.dbName = `viazuri_chat_${sessionId}`;
+        }
 
-    function send() {
-      const prompt = document.getElementById("prompt").value;
-      if (!prompt) return;
+        async saveMessage(sender, content) {
+            const messages = await this.getMessages();
+            messages.push({ id: Date.now(), sender, content, timestamp: new Date().toISOString() });
+            localStorage.setItem(this.dbName, JSON.stringify(messages));
+            return messages;
+        }
 
-      // close previous stream
-      if (source) source.close();
+        async getMessages() {
+            const stored = localStorage.getItem(this.dbName);
+            return stored ? JSON.parse(stored) : [];
+        }
 
-      output.innerText += "\n\nYou: " + prompt + "\nAI: ";
+        async getLastNMessages(n = 10) {
+            const messages = await this.getMessages();
+            return messages.slice(-n);
+        }
 
-      source = new EventSource(
-        "/stream?prompt=" + encodeURIComponent(prompt)
-      );
-
-      source.onmessage = (event) => {
-        output.innerText += event.data;
-      };
-
-      source.addEventListener("end", () => {
-        source.close();
-        source = null;
-      });
+        clear() {
+            localStorage.removeItem(this.dbName);
+        }
     }
+
+    class ViazuriChat {
+        constructor() {
+            this.sessionId = "chat_" + Date.now();
+            this.storage = new ChatStorage(this.sessionId);
+            this.loadHistory();
+        }
+
+        async loadHistory() {
+            const messages = await this.storage.getLastNMessages(20);
+            messages.forEach(msg => appendMessage(msg.sender, msg.content));
+        }
+
+        async send(prompt) {
+            if (!prompt || isStreaming) return;
+
+            // Save user message locally FIRST
+            await this.storage.saveMessage('user', prompt);
+            appendMessage('user', prompt);
+            promptInput.value = "";
+            sendBtn.disabled = true;
+            isStreaming = true;
+            currentAiMessage = null;
+
+            const typingIndicator = showTypingIndicator();
+            if (source) source.close();
+
+            // Send with history context
+            const history = await this.storage.getLastNMessages(10);
+            const params = new URLSearchParams({
+                prompt,
+                session_id: this.sessionId,
+                history: JSON.stringify(history)
+            });
+
+            source = new EventSource(`/stream?${params}`);
+
+            source.onmessage = async (event) => {
+                if (event.data.includes("[DONE]")) {
+                    removeTypingIndicator();
+                    // Save AI response locally
+                    if (currentAiMessage) {
+                        const aiContent = currentAiMessage.textContent;
+                        await this.storage.saveMessage('ai', aiContent);
+                    }
+                    isStreaming = false;
+                    sendBtn.disabled = false;
+                    source.close();
+                    source = null;
+                    return;
+                }
+
+                const content = event.data.trim();
+                if (content && !content.includes("⚠️ Error:")) {
+                    if (!currentAiMessage) {
+                        removeTypingIndicator();
+                        const wrapper = document.createElement("div");
+                        wrapper.className = "flex justify-start";
+                        currentAiMessage = document.createElement("div");
+                        currentAiMessage.className = "bg-white border border-gray-300 rounded-bl-none rounded-xl p-3 max-w-[70%]";
+                        wrapper.appendChild(currentAiMessage);
+                        chatDiv.appendChild(wrapper);
+                    }
+                    currentAiMessage.textContent += content;
+                    chatDiv.scrollTop = chatDiv.scrollHeight;
+                }
+                else if (event.data.includes("⚠️ Error:")) {
+                    removeTypingIndicator();
+                    appendMessage("ai", event.data.trim(), true);
+                    isStreaming = false;
+                    sendBtn.disabled = false;
+                }
+            };
+
+            source.onerror = (err) => {
+                console.error("SSE error:", err);
+                removeTypingIndicator();
+                isStreaming = false;
+                sendBtn.disabled = false;
+                if (source) source.close();
+                source = null;
+            };
+        }
+    }
+
+    let source = null;
+    let isStreaming = false;
+    let currentAiMessage = null;
+    const chatDiv = document.getElementById("chat");
+    const promptInput = document.getElementById("prompt");
+    const sendBtn = document.getElementById("send-btn");
+    const viazuriChat = new ViazuriChat();
+
+    promptInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        viazuriChat.send(promptInput.value.trim());
+      }
+    });
+
+    function appendMessage(sender, text, isError=false) {
+      const wrapper = document.createElement("div");
+      wrapper.className = `flex ${sender === 'user' ? 'justify-end' : 'justify-start'}`;
+      const bubble = document.createElement("div");
+      bubble.className = `
+        p-3 rounded-xl max-w-[70%] 
+        ${sender==='user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white border border-gray-300 rounded-bl-none'}
+        ${isError ? 'bg-red-100 text-red-700 border-red-300' : ''}
+      `;
+      bubble.innerHTML = text.replace(/\n/g,'<br>');
+      wrapper.appendChild(bubble);
+      chatDiv.appendChild(wrapper);
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+      return bubble;
+    }
+
+    function showTypingIndicator() {
+      const typing = document.createElement("div");
+      typing.id = "typing";
+      typing.className = "flex justify-start";
+      typing.innerHTML = `
+        <div class="bg-white border border-gray-300 rounded-bl-none rounded-xl p-3 max-w-[70%] flex items-center gap-2">
+          <span class="animate-pulse">Viazuri is thinking...</span>
+          <div class="flex space-x-1">
+            <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></span>
+            <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200"></span>
+            <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-400"></span>
+          </div>
+        </div>
+      `;
+      chatDiv.appendChild(typing);
+      chatDiv.scrollTop = chatDiv.scrollHeight;
+      return typing;
+    }
+
+    function removeTypingIndicator() {
+      const typing = document.getElementById("typing");
+      if (typing) typing.remove();
+    }
+
+    sendBtn.addEventListener("click", () => {
+      viazuriChat.send(promptInput.value.trim());
+    });
+
+    promptInput.focus();
   </script>
 </body>
 </html>

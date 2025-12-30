@@ -115,21 +115,53 @@
 #             print("Parse error:", response_data, e)
 #             return None, history
 
+
 from src.configs.env import GEMINI_API_KEY
 from src.llm.prompt import SYSTEM_PROMPT
-
+from src.tools.registry import tools  
+from langchain.agents import create_agent
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage
+import logging
 
-model = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=GEMINI_API_KEY, streaming=True)
+# Optional: logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
+# --- Initialize LLM ---
+model = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash",
+    google_api_key=GEMINI_API_KEY,
+    streaming=True
+)
+
+
+agent = create_agent(model, tools=tools)
 
 async def stream_response(user_input: str):
-    messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=user_input),
-    ]
+    """
+    Streams responses from the agent including tool execution.
+    """
+    try:
+        # System + user messages
+        messages = [
+            SystemMessage(content=SYSTEM_PROMPT),
+            HumanMessage(content=user_input)
+        ]
 
-    async for chunk in model.astream(messages):
-        if chunk.content:
-            yield chunk.content
+        # async streaming
+        for chunk in agent.stream(messages):
+            if hasattr(chunk, "content") and chunk.content:
+                yield f"data: {chunk.content}\n\n"
+        # signal end of stream
+        yield "event: end\ndata: done\n\n"
 
+    except Exception as e:
+        logger.error(f"Agent streaming error: {e}")
+        yield f"data: ⚠️ Error: {str(e)}\n\n"

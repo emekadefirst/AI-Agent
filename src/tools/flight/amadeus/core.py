@@ -5,6 +5,7 @@ from src.configs.http import AsyncHTTPRequest, Methods
 from src.tools.flight.amadeus.auth import AmadeusAuth
 from src.configs.env import AMADEUS_BASE_URL
 from src.schemas.order import CreateFlightOrder, FlightOffer
+from langchain_core.tools import tool
 
 # --- Logger setup ---
 logger = logging.getLogger(__name__)
