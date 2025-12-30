@@ -100,7 +100,9 @@
             source = new EventSource(`/stream?${params}`);
 
             source.onmessage = async (event) => {
-                if (event.data.includes("[DONE]")) {
+                const content = event.data.trim();
+                
+                if (content.includes("[DONE]")) {
                     removeTypingIndicator();
                     // Save AI response locally
                     if (currentAiMessage) {
@@ -114,7 +116,6 @@
                     return;
                 }
 
-                const content = event.data.trim();
                 if (content && !content.includes("⚠️ Error:")) {
                     if (!currentAiMessage) {
                         removeTypingIndicator();
@@ -128,9 +129,9 @@
                     currentAiMessage.textContent += content;
                     chatDiv.scrollTop = chatDiv.scrollHeight;
                 }
-                else if (event.data.includes("⚠️ Error:")) {
+                else if (content.includes("⚠️ Error:")) {
                     removeTypingIndicator();
-                    appendMessage("ai", event.data.trim(), true);
+                    appendMessage("ai", content, true);
                     isStreaming = false;
                     sendBtn.disabled = false;
                 }
@@ -144,6 +145,12 @@
                 if (source) source.close();
                 source = null;
             };
+
+            source.addEventListener('error', (e) => {
+                if (e.readyState === EventSource.CLOSED) {
+                    console.log('EventSource closed');
+                }
+            });
         }
     }
 

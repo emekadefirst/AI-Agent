@@ -101,9 +101,7 @@ async def stream_response(user_input: str, session_id: str, client_history: str 
                         full_response.append(content)
                         yield f"data: {content}\n\n"
 
-        # Return full session for client storage
-        yield f"data: __SESSION__:{json.dumps({'session_id': session_id})}\n\n"
-        yield "event: end\ndata: [DONE]\n\n"
+        yield "data: [DONE]\n\n"
         
     except Exception as e:
         yield f"data: ⚠️ Error: {str(e)}\n\n"
